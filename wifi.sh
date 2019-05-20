@@ -1,15 +1,21 @@
 #!/bin/bash
 
+# Wi-Fi Connection Script
+#
+# This script uses the wpa_passphrase, wpa_supplicant, and dhclient tools to
+# try to establish an Internet connection through a Wi-Fi access point selected
+# by the user. These tools must be run with root privileges, which means this
+# script must be run with root privileges. Before trying to make a connection,
+# this script will attempt to shut down any existing connection by terminating
+# existing wpa_supplicant processes through wpa_cli or, if it can't (usually
+# because some other network configuration software like NetworkManager started
+# it), sending kill signals to them. It will also kill any existing dhclient
+# processes and remove any IP address that might be associated with the
+# wireless device.
+
 # Check for a pre-existing connection through wpa_supplicant.
 # $1 = device interface
 function check_conn {
-    # First check to see if NetworkManager has any established connections. If
-    # so, exit. It is best for the user to disconnect through NetworkManager
-    # first.
-    if grep -q "$1" <<< $(nmcli -c no c show); then
-        echo "NetworkManager is currently running."
-        exit 0
-    fi
     # Check if there are any wpa_supplicant processes running.
     if grep -q wpa_supplicant <<< $(ps -e); then
         printf "\nwpa_supplicant is currently running.\n\n"
@@ -35,8 +41,8 @@ function check_conn {
     fi
 }
 
-# Try connecting to the access point using the wpa_supplicant tool.
-# $1 = device interface
+# Try connecting to the access point using the wpa_supplicant tool.  $1 =
+# device interface
 # $2 = WPA-PSK data
 function wpa_connect {
     # Run wpa_supplicant in the background (-B), with the wext driver (-D), for
@@ -60,12 +66,12 @@ function wpa_connect {
 # $1 = device interface
 # $2 = access point SSID
 function wpa_get {
-    # If wpa_supplicant.conf does not exist or if the chosen
-    # access point does not have an entry in it:
+    # If wpa_supplicant.conf does not exist or if the chosen access point does
+    # not have an entry in it:
     if [ ! -f wpa_supplicant.conf ] ||
         ! grep -q 'ssid=\"'"$2"'\"' wpa_supplicant.conf; then
-        # Get a password, give it to the wpa_passphrase tool
-        # to get the PSK, and store the output in a variable.
+        # Get a password, give it to the wpa_passphrase tool to get the PSK,
+        # and store the output in a variable.
         read -s -p "Password: " p
         wpa=$(wpa_passphrase "$2" "$p")
         # Try connecting to the access point with the PSK.
@@ -106,6 +112,12 @@ function wifi_select {
         wifi_select
     fi
 }
+
+# Check for root access.
+if [ "$EUID" -ne 0 ]; then
+    printf "\nRoot privileges required. Please run with sudo.\n\n"
+    exit 0
+fi
 
 # Read a list of wireless devices into the iface variable.
 readarray -t iface <<< $(iw dev | sed -rn 's/\s*Interface ([a-z0-9]+)/\1/p')
